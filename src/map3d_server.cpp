@@ -32,10 +32,13 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *
  * $Id: pcd_to_pointcloud.cpp 33238 2010-03-11 00:46:58Z rusu $
+ * $Id: map3d_server.cpp 33238 2019-08-30 mbosch $
  *
  */
 
 /**
+\author Marc Bosch-Jorge
+@b map3d_server is a simple node that serves a 3d map stored as a PCD (Point Cloud Data), derived from pcl_ros/pcd_to_pointcloud.
 \author Radu Bogdan Rusu
 @b pcd_to_pointcloud is a simple node that loads PCD (Point Cloud Data) files from disk and publishes them as ROS messages on the network.
  **/
@@ -60,7 +63,7 @@ T get_param(std::string const& name, T default_value) {
     return value;
 }
 
-class pcd_to_pointcloud {
+class map3d_server {
     ros::NodeHandle nh;
     // the topic to publish at, will be overwritten to give the remapped name
     std::string cloud_topic;
@@ -98,7 +101,7 @@ class pcd_to_pointcloud {
     }
 
 public:
-    pcd_to_pointcloud()
+    map3d_server()
     : cloud_topic("cloud_pcd"), file_name(""), interval(0.0), frame_id("base_link"), latch(false)
     {
         // update potentially remapped topic name for later logging
@@ -144,7 +147,7 @@ public:
         // treat publishing once as a special case to interval publishing
         bool oneshot = interval <= 0;
         timer = nh.createTimer(ros::Duration(interval),
-                               &pcd_to_pointcloud::timer_callback,
+                               &map3d_server::timer_callback,
                                this,
                                oneshot);
     }
@@ -170,7 +173,7 @@ int main (int argc, char** argv) {
     // init ROS
     ros::init(argc, argv, "map3d_server");
     // set up node
-    pcd_to_pointcloud node;
+    map3d_server node;
     // initializes from ROS parameters
     node.parse_ros_params();
     // also allow config to be provided via command line args

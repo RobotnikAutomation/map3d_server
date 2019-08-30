@@ -32,8 +32,14 @@
  *  POSSIBILITY OF SUCH DAMAGE.
  *
  * $Id: pointcloud_to_pcd.cpp 33238 2010-03-11 00:46:58Z rusu $
+ * $Id: map3d_saver.cpp 33238 2019-08-30 mbosch $
  *
  */
+
+/**
+\author Marc Bosch-Jorge
+@b map3d_saver is a simple node that serves a 3d map stored as a PCD (Point Cloud Data), derived from pcl_ros/pointcloud_to_pcd.
+ **/
 
 // ROS core
 #include <ros/ros.h>
@@ -60,7 +66,7 @@ using namespace std;
 @b pointcloud_to_pcd is a simple node that retrieves a ROS point cloud message and saves it to disk into a PCD (Point
 Cloud Data) file format.
 **/
-class PointCloudToPCD
+class map3d_saver
 {
   protected:
     ros::NodeHandle nh_;
@@ -138,7 +144,7 @@ class PointCloudToPCD
     }
 
     ////////////////////////////////////////////////////////////////////////////////
-    PointCloudToPCD () : binary_(false), compressed_(false), tf_listener_(tf_buffer_)
+    map3d_saver () : binary_(false), compressed_(false), tf_listener_(tf_buffer_)
     {
       // Check if a prefix parameter is defined for output file names.
       ros::NodeHandle priv_nh("~");
@@ -179,7 +185,7 @@ class PointCloudToPCD
 
       cloud_topic_ = "input";
 
-      sub_ = nh_.subscribe (cloud_topic_, 1,  &PointCloudToPCD::cloud_cb, this);
+      sub_ = nh_.subscribe (cloud_topic_, 1,  &map3d_saver::cloud_cb, this);
       ROS_INFO ("Listening for incoming data on topic %s",
                 nh_.resolveName (cloud_topic_).c_str ());
     }
@@ -191,7 +197,7 @@ int
 {
   ros::init (argc, argv, "map3d_saver", ros::init_options::AnonymousName);
 
-  PointCloudToPCD b;
+  map3d_saver b;
   ros::spin ();
 
   return (0);
