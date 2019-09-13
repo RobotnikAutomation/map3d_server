@@ -226,10 +226,14 @@ public:
 
     int maxn = 0;
     int index = 0;
-    for (double y = min_point.y; y <= max_point.y; y += resolution)
+    for (int index_y = 0; index_y < grid.info.height; index_y++)
+    // for (double y = min_point.y; y <= max_point.y; y += resolution)
     {
-      for (double x = min_point.x; x <= max_point.x; x += resolution)
+      for (int index_x = 0; index_x < grid.info.width; index_x++)
+      // for (double x = min_point.x; x <= max_point.x; x += resolution)
       {
+        double x = min_point.x + index_x * resolution;
+        double y = min_point.y + index_y * resolution;
         PointType point(x, y, 0);
         int neighbours = kdtree.radiusSearch(point, resolution, indices, distances);
         if (neighbours > threshold)
@@ -245,7 +249,7 @@ public:
 
     ROS_INFO("Index: %d, size: %d", index, grid.data.size());
     ROS_INFO("Max neighbours: %d", maxn);
-    ROS_INFO_STREAM("Info: " << grid.info);
+    // ROS_INFO_STREAM("Info: " << grid.info);
 
     return true;
   }
