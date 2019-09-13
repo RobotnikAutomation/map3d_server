@@ -108,7 +108,7 @@ class map3d_server
   }
 
 public:
-  map3d_server() : cloud_topic("cloud_pcd"), file_name(""), interval(0.0), frame_id("base_link"), latch(false)
+  map3d_server() : cloud_topic("mapcloud"), file_name(""), interval(0.0), frame_id("map"), latch(false)
   {
     // update potentially remapped topic name for later logging
     cloud_topic = nh.resolveName(cloud_topic);
