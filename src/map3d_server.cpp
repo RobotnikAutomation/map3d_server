@@ -38,9 +38,11 @@
 
 /**
 \author Marc Bosch-Jorge
-@b map3d_server is a simple node that serves a 3d map stored as a PCD (Point Cloud Data), derived from pcl_ros/pcd_to_pointcloud.
+@b map3d_server is a simple node that serves a 3d map stored as a PCD (Point Cloud Data), derived from
+pcl_ros/pcd_to_pointcloud.
 \author Radu Bogdan Rusu
-@b pcd_to_pointcloud is a simple node that loads PCD (Point Cloud Data) files from disk and publishes them as ROS messages on the network.
+@b pcd_to_pointcloud is a simple node that loads PCD (Point Cloud Data) files from disk and publishes them as ROS
+messages on the network.
  **/
 
 // STL
@@ -57,138 +59,151 @@
 
 // helper function to return parsed parameter or default value
 template <typename T>
-T get_param(std::string const& name, T default_value) {
-    T value;
-    ros::param::param<T>(name, value, default_value);
-    return value;
+T get_param(std::string const& name, T default_value)
+{
+  T value;
+  ros::param::param<T>(name, value, default_value);
+  return value;
 }
 
-class map3d_server {
-    ros::NodeHandle nh;
-    // the topic to publish at, will be overwritten to give the remapped name
-    std::string cloud_topic;
-    // source file name, will be overwritten to produce actually configured file
-    std::string file_name;
-    // republish interval in seconds
-    double interval;
-    // tf2 frame_id
-    std::string frame_id;
-    // latched topic enabled/disabled
-    bool latch;
-    // pointcloud message and publisher
-    sensor_msgs::PointCloud2 cloud;
-    ros::Publisher pub;
-    // timer to handle republishing
-    ros::Timer timer;
+class map3d_server
+{
+  ros::NodeHandle nh;
+  // the topic to publish at, will be overwritten to give the remapped name
+  std::string cloud_topic;
+  // source file name, will be overwritten to produce actually configured file
+  std::string file_name;
+  // republish interval in seconds
+  double interval;
+  // tf2 frame_id
+  std::string frame_id;
+  // latched topic enabled/disabled
+  bool latch;
+  // pointcloud message and publisher
+  sensor_msgs::PointCloud2 cloud;
+  ros::Publisher pub;
+  // timer to handle republishing
+  ros::Timer timer;
 
-    void publish() {
-        ROS_DEBUG_STREAM_ONCE("Publishing pointcloud");
-        ROS_DEBUG_STREAM_ONCE(" * number of points: " << cloud.width * cloud.height);
-        ROS_DEBUG_STREAM_ONCE(" * frame_id: " << cloud.header.frame_id);
-        ROS_DEBUG_STREAM_ONCE(" * topic_name: " << cloud_topic);
-        int num_subscribers = pub.getNumSubscribers();
-        if (num_subscribers > 0) {
-            ROS_DEBUG("Publishing data to %d subscribers.", num_subscribers);
-        }
-        // update timestamp and publish
-        cloud.header.stamp = ros::Time::now();
-        pub.publish(cloud);
+  void publish()
+  {
+    ROS_DEBUG_STREAM_ONCE("Publishing pointcloud");
+    ROS_DEBUG_STREAM_ONCE(" * number of points: " << cloud.width * cloud.height);
+    ROS_DEBUG_STREAM_ONCE(" * frame_id: " << cloud.header.frame_id);
+    ROS_DEBUG_STREAM_ONCE(" * topic_name: " << cloud_topic);
+    int num_subscribers = pub.getNumSubscribers();
+    if (num_subscribers > 0)
+    {
+      ROS_DEBUG("Publishing data to %d subscribers.", num_subscribers);
     }
+    // update timestamp and publish
+    cloud.header.stamp = ros::Time::now();
+    pub.publish(cloud);
+  }
 
-    void timer_callback(ros::TimerEvent const&) {
-        // just re-publish
-        publish();
-    }
+  void timer_callback(ros::TimerEvent const&)
+  {
+    // just re-publish
+    publish();
+  }
 
 public:
-    map3d_server()
-    : cloud_topic("cloud_pcd"), file_name(""), interval(0.0), frame_id("base_link"), latch(false)
+  map3d_server() : cloud_topic("cloud_pcd"), file_name(""), interval(0.0), frame_id("base_link"), latch(false)
+  {
+    // update potentially remapped topic name for later logging
+    cloud_topic = nh.resolveName(cloud_topic);
+  }
+
+  void parse_ros_params()
+  {
+    file_name = get_param("~file_name", file_name);
+    interval = get_param("~interval", interval);
+    frame_id = get_param("~frame_id", frame_id);
+    latch = get_param("~latch", latch);
+  }
+
+  void parse_cmdline_args(int argc, char** argv)
+  {
+    if (argc > 1)
     {
-        // update potentially remapped topic name for later logging
-        cloud_topic = nh.resolveName(cloud_topic);
+      file_name = argv[1];
     }
+    if (argc > 2)
+    {
+      std::stringstream str(argv[2]);
+      double x;
+      if (str >> x)
+        interval = x;
+    }
+  }
 
-    void parse_ros_params() {
-        file_name = get_param("~file_name", file_name);
-        interval = get_param("~interval", interval);
-        frame_id = get_param("~frame_id", frame_id);
-        latch = get_param("~latch", latch);
+  bool try_load_pointcloud()
+  {
+    if (file_name.empty())
+    {
+      ROS_ERROR_STREAM("Can't load pointcloud: no file name provided");
+      return false;
     }
+    else if (pcl::io::loadPCDFile(file_name, cloud) < 0)
+    {
+      ROS_ERROR_STREAM("Failed to parse pointcloud from file ('" << file_name << "')");
+      return false;
+    }
+    // success: set frame_id appropriately
+    cloud.header.frame_id = frame_id;
+    return true;
+  }
 
-    void parse_cmdline_args(int argc, char** argv) {
-        if (argc > 1) {
-            file_name = argv[1];
-        }
-        if (argc > 2) {
-            std::stringstream str(argv[2]);
-            double x;
-            if (str >> x)
-                interval = x;
-        }
-    }
+  void init_run()
+  {
+    // init publisher
+    pub = nh.advertise<sensor_msgs::PointCloud2>(cloud_topic, 1, latch);
+    // treat publishing once as a special case to interval publishing
+    bool oneshot = interval <= 0;
+    timer = nh.createTimer(ros::Duration(interval), &map3d_server::timer_callback, this, oneshot);
+  }
 
-    bool try_load_pointcloud() {
-        if (file_name.empty()) {
-            ROS_ERROR_STREAM("Can't load pointcloud: no file name provided");
-            return false;
-        }
-        else if (pcl::io::loadPCDFile(file_name, cloud) < 0) {
-            ROS_ERROR_STREAM("Failed to parse pointcloud from file ('" << file_name << "')");
-            return false;
-        }
-        // success: set frame_id appropriately
-        cloud.header.frame_id = frame_id;
-        return true;
-    }
+  void print_config_info()
+  {
+    ROS_INFO_STREAM("Recognized the following parameters");
+    ROS_INFO_STREAM(" * file_name: " << file_name);
+    ROS_INFO_STREAM(" * interval: " << interval);
+    ROS_INFO_STREAM(" * frame_id: " << frame_id);
+    ROS_INFO_STREAM(" * topic_name: " << cloud_topic);
+    ROS_INFO_STREAM(" * latch: " << std::boolalpha << latch);
+  }
 
-    void init_run() {
-        // init publisher
-        pub = nh.advertise<sensor_msgs::PointCloud2>(cloud_topic, 1, latch);
-        // treat publishing once as a special case to interval publishing
-        bool oneshot = interval <= 0;
-        timer = nh.createTimer(ros::Duration(interval),
-                               &map3d_server::timer_callback,
-                               this,
-                               oneshot);
-    }
-
-    void print_config_info() {
-        ROS_INFO_STREAM("Recognized the following parameters");
-        ROS_INFO_STREAM(" * file_name: " << file_name);
-        ROS_INFO_STREAM(" * interval: " << interval);
-        ROS_INFO_STREAM(" * frame_id: " << frame_id);
-        ROS_INFO_STREAM(" * topic_name: " << cloud_topic);
-        ROS_INFO_STREAM(" * latch: " << std::boolalpha << latch);
-    }
-
-    void print_data_info() {
-        ROS_INFO_STREAM("Loaded pointcloud with the following stats");
-        ROS_INFO_STREAM(" * number of points: " << cloud.width * cloud.height);
-        ROS_INFO_STREAM(" * total size [bytes]: " << cloud.data.size());
-        ROS_INFO_STREAM(" * channel names: " << pcl::getFieldsList(cloud));
-    }
+  void print_data_info()
+  {
+    ROS_INFO_STREAM("Loaded pointcloud with the following stats");
+    ROS_INFO_STREAM(" * number of points: " << cloud.width * cloud.height);
+    ROS_INFO_STREAM(" * total size [bytes]: " << cloud.data.size());
+    ROS_INFO_STREAM(" * channel names: " << pcl::getFieldsList(cloud));
+  }
 };
 
-int main (int argc, char** argv) {
-    // init ROS
-    ros::init(argc, argv, "map3d_server");
-    // set up node
-    map3d_server node;
-    // initializes from ROS parameters
-    node.parse_ros_params();
-    // also allow config to be provided via command line args
-    // the latter take precedence
-    node.parse_cmdline_args(argc, argv);
-    // print info about effective configuration settings
-    node.print_config_info();
-    // try to load pointcloud from file
-    if (!node.try_load_pointcloud()) {
-        return -1;
-    }
-    // print info about pointcloud
-    node.print_data_info();
-    // initialize run
-    node.init_run();
-    // blocking call to process callbacks etc
-    ros::spin();
+int main(int argc, char** argv)
+{
+  // init ROS
+  ros::init(argc, argv, "map3d_server");
+  // set up node
+  map3d_server node;
+  // initializes from ROS parameters
+  node.parse_ros_params();
+  // also allow config to be provided via command line args
+  // the latter take precedence
+  node.parse_cmdline_args(argc, argv);
+  // print info about effective configuration settings
+  node.print_config_info();
+  // try to load pointcloud from file
+  if (!node.try_load_pointcloud())
+  {
+    return -1;
+  }
+  // print info about pointcloud
+  node.print_data_info();
+  // initialize run
+  node.init_run();
+  // blocking call to process callbacks etc
+  ros::spin();
 }

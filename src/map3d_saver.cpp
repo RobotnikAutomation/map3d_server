@@ -38,7 +38,8 @@
 
 /**
 \author Marc Bosch-Jorge
-@b map3d_saver is a simple node that serves a 3d map stored as a PCD (Point Cloud Data), derived from pcl_ros/pointcloud_to_pcd.
+@b map3d_saver is a simple node that serves a 3d map stored as a PCD (Point Cloud Data), derived from
+pcl_ros/pointcloud_to_pcd.
  **/
 
 // ROS core
@@ -68,137 +69,134 @@ Cloud Data) file format.
 **/
 class map3d_saver
 {
-  protected:
-    ros::NodeHandle nh_;
+protected:
+  ros::NodeHandle nh_;
 
-  private:
-    std::string prefix_;
-    std::string filename_;
-    bool binary_;
-    bool compressed_;
-    std::string fixed_frame_;
-    tf2_ros::Buffer tf_buffer_;
-    tf2_ros::TransformListener tf_listener_;
+private:
+  std::string prefix_;
+  std::string filename_;
+  bool binary_;
+  bool compressed_;
+  std::string fixed_frame_;
+  tf2_ros::Buffer tf_buffer_;
+  tf2_ros::TransformListener tf_listener_;
 
-  public:
-    string cloud_topic_;
+public:
+  string cloud_topic_;
 
-    ros::Subscriber sub_;
+  ros::Subscriber sub_;
 
-    ////////////////////////////////////////////////////////////////////////////////
-    // Callback
-    void
-      cloud_cb (const pcl::PCLPointCloud2::ConstPtr& cloud)
+  ////////////////////////////////////////////////////////////////////////////////
+  // Callback
+  void cloud_cb(const pcl::PCLPointCloud2::ConstPtr& cloud)
+  {
+    if ((cloud->width * cloud->height) == 0)
+      return;
+
+    ROS_INFO("Received %d data points in frame %s with the following fields: %s", (int)cloud->width * cloud->height,
+             cloud->header.frame_id.c_str(), pcl::getFieldsList(*cloud).c_str());
+
+    Eigen::Vector4f v = Eigen::Vector4f::Zero();
+    Eigen::Quaternionf q = Eigen::Quaternionf::Identity();
+    if (!fixed_frame_.empty())
     {
-      if ((cloud->width * cloud->height) == 0)
+      if (!tf_buffer_.canTransform(fixed_frame_, cloud->header.frame_id, pcl_conversions::fromPCL(cloud->header.stamp),
+                                   ros::Duration(3.0)))
+      {
+        ROS_WARN("Could not get transform!");
         return;
-
-      ROS_INFO ("Received %d data points in frame %s with the following fields: %s",
-                (int)cloud->width * cloud->height,
-                cloud->header.frame_id.c_str (),
-                pcl::getFieldsList (*cloud).c_str ());
-
-      Eigen::Vector4f v = Eigen::Vector4f::Zero ();
-      Eigen::Quaternionf q = Eigen::Quaternionf::Identity ();
-      if (!fixed_frame_.empty ()) {
-        if (!tf_buffer_.canTransform (fixed_frame_, cloud->header.frame_id, pcl_conversions::fromPCL (cloud->header.stamp), ros::Duration (3.0))) {
-          ROS_WARN("Could not get transform!");
-          return;
-        }
-
-        Eigen::Affine3d transform;
-        transform = tf2::transformToEigen (tf_buffer_.lookupTransform (fixed_frame_, cloud->header.frame_id,  pcl_conversions::fromPCL (cloud->header.stamp)));
-        v = Eigen::Vector4f::Zero ();
-        v.head<3> () = transform.translation ().cast<float> ();
-        q = transform.rotation ().cast<float> ();
       }
 
-      std::stringstream ss;
-      if (filename_ != "")
-      {
-        ss << filename_ << ".pcd";
-      }
-      else
-      {
-        ss << prefix_ << cloud->header.stamp << ".pcd";
-      }
-      ROS_INFO ("Data saved to %s", ss.str ().c_str ());
-
-      pcl::PCDWriter writer;
-      if(binary_)
-	{
-	  if(compressed_)
-	    {
-	      writer.writeBinaryCompressed (ss.str (), *cloud, v, q);
-	    }
-	  else
-	    {
-	      writer.writeBinary (ss.str (), *cloud, v, q);
-	    }
-	}
-      else
-	{
-	  writer.writeASCII (ss.str (), *cloud, v, q, 8);
-	}
-
+      Eigen::Affine3d transform;
+      transform = tf2::transformToEigen(tf_buffer_.lookupTransform(fixed_frame_, cloud->header.frame_id,
+                                                                   pcl_conversions::fromPCL(cloud->header.stamp)));
+      v = Eigen::Vector4f::Zero();
+      v.head<3>() = transform.translation().cast<float>();
+      q = transform.rotation().cast<float>();
     }
 
-    ////////////////////////////////////////////////////////////////////////////////
-    map3d_saver () : binary_(false), compressed_(false), tf_listener_(tf_buffer_)
+    std::stringstream ss;
+    if (filename_ != "")
     {
-      // Check if a prefix parameter is defined for output file names.
-      ros::NodeHandle priv_nh("~");
-      if (priv_nh.getParam ("prefix", prefix_))
-        {
-          ROS_INFO_STREAM ("PCD file prefix is: " << prefix_);
-        }
-      else if (nh_.getParam ("prefix", prefix_))
-        {
-          ROS_WARN_STREAM ("Non-private PCD prefix parameter is DEPRECATED: "
-                           << prefix_);
-        }
-
-      priv_nh.getParam ("fixed_frame", fixed_frame_);
-      priv_nh.getParam ("binary", binary_);
-      priv_nh.getParam ("compressed", compressed_);
-      priv_nh.getParam ("filename", filename_);
-      if(binary_)
-	{
-	  if(compressed_)
-	    {
-	      ROS_INFO_STREAM ("Saving as binary compressed PCD");
-	    }
-	  else
-	    {
-	      ROS_INFO_STREAM ("Saving as binary PCD");
-	    }
-	}
-      else
-	{
-	  ROS_INFO_STREAM ("Saving as binary PCD");
-	}
-
-      if (filename_ != "")
-      {
-        ROS_INFO_STREAM ("Saving to fixed filename: " << filename_);
-      }
-
-      cloud_topic_ = "input";
-
-      sub_ = nh_.subscribe (cloud_topic_, 1,  &map3d_saver::cloud_cb, this);
-      ROS_INFO ("Listening for incoming data on topic %s",
-                nh_.resolveName (cloud_topic_).c_str ());
+      ss << filename_ << ".pcd";
     }
+    else
+    {
+      ss << prefix_ << cloud->header.stamp << ".pcd";
+    }
+    ROS_INFO("Data saved to %s", ss.str().c_str());
+
+    pcl::PCDWriter writer;
+    if (binary_)
+    {
+      if (compressed_)
+      {
+        writer.writeBinaryCompressed(ss.str(), *cloud, v, q);
+      }
+      else
+      {
+        writer.writeBinary(ss.str(), *cloud, v, q);
+      }
+    }
+    else
+    {
+      writer.writeASCII(ss.str(), *cloud, v, q, 8);
+    }
+  }
+
+  ////////////////////////////////////////////////////////////////////////////////
+  map3d_saver() : binary_(false), compressed_(false), tf_listener_(tf_buffer_)
+  {
+    // Check if a prefix parameter is defined for output file names.
+    ros::NodeHandle priv_nh("~");
+    if (priv_nh.getParam("prefix", prefix_))
+    {
+      ROS_INFO_STREAM("PCD file prefix is: " << prefix_);
+    }
+    else if (nh_.getParam("prefix", prefix_))
+    {
+      ROS_WARN_STREAM("Non-private PCD prefix parameter is DEPRECATED: " << prefix_);
+    }
+
+    priv_nh.getParam("fixed_frame", fixed_frame_);
+    priv_nh.getParam("binary", binary_);
+    priv_nh.getParam("compressed", compressed_);
+    priv_nh.getParam("filename", filename_);
+    if (binary_)
+    {
+      if (compressed_)
+      {
+        ROS_INFO_STREAM("Saving as binary compressed PCD");
+      }
+      else
+      {
+        ROS_INFO_STREAM("Saving as binary PCD");
+      }
+    }
+    else
+    {
+      ROS_INFO_STREAM("Saving as binary PCD");
+    }
+
+    if (filename_ != "")
+    {
+      ROS_INFO_STREAM("Saving to fixed filename: " << filename_);
+    }
+
+    cloud_topic_ = "input";
+
+    sub_ = nh_.subscribe(cloud_topic_, 1, &map3d_saver::cloud_cb, this);
+    ROS_INFO("Listening for incoming data on topic %s", nh_.resolveName(cloud_topic_).c_str());
+  }
 };
 
 /* ---[ */
-int
-  main (int argc, char** argv)
+int main(int argc, char** argv)
 {
-  ros::init (argc, argv, "map3d_saver", ros::init_options::AnonymousName);
+  ros::init(argc, argv, "map3d_saver", ros::init_options::AnonymousName);
 
   map3d_saver b;
-  ros::spin ();
+  ros::spin();
 
   return (0);
 }
