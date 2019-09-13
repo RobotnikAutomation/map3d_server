@@ -142,6 +142,8 @@ public:
     {
       writer.writeASCII(ss.str(), *cloud, v, q, 8);
     }
+
+    ros::shutdown();
   }
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -196,7 +198,13 @@ int main(int argc, char** argv)
   ros::init(argc, argv, "map3d_saver", ros::init_options::AnonymousName);
 
   map3d_saver b;
-  ros::spin();
+  ros::Rate r(10);
+  while (ros::ok())
+  {
+    ROS_INFO_THROTTLE(5, "Waiting for incoming data");
+    r.sleep();
+    ros::spinOnce();
+  }
 
   return (0);
 }
