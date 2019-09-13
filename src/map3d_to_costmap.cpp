@@ -58,6 +58,7 @@ messages on the network.
 #include <pcl/common/common.h>
 #include <pcl_conversions/pcl_conversions.h>
 #include <pcl/kdtree/kdtree_flann.h>
+#include <pcl/filters/voxel_grid.h>
 
 #include <string>
 #include <sstream>
@@ -180,9 +181,17 @@ public:
 
   bool project_costmap()
   {
+    pcl::PointCloud<PointType>::Ptr input(new pcl::PointCloud<PointType>());
+    *input = pointcloud;
+
+    pcl::VoxelGrid<PointType> downsample;
+    downsample.setInputCloud(input);
+    downsample.setLeafSize(resolution, resolution, resolution);
+    downsample.filter(pointcloud);
+
     for (auto& point : pointcloud)
     {
-      if (point.z > -1 and point.z < 4)
+      if (point.z > 0.2 and point.z < 4)
         point.z = 0;
       else
         point.z = 100;
@@ -196,8 +205,6 @@ public:
 
     max_point.x = 15;
     max_point.y = 3;
-
-    pcl::io::savePCDFile("/home/mbosch/projected.pcd", pointcloud);
 
     pcl::PointCloud<PointType>::Ptr p(new pcl::PointCloud<PointType>());
     *p = pointcloud;
@@ -238,6 +245,8 @@ public:
 
     ROS_INFO("Index: %d, size: %d", index, grid.data.size());
     ROS_INFO("Max neighbours: %d", maxn);
+    ROS_INFO_STREAM("Info: " << grid.info);
+
     return true;
   }
 
