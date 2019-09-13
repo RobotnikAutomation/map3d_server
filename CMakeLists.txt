@@ -2,6 +2,7 @@ cmake_minimum_required(VERSION 2.8.3)
 project(map3d_server)
 
 add_compile_options(-std=c++11)
+set(CMAKE_BUILD_TYPE Debug)
 
 find_package(catkin REQUIRED COMPONENTS
   pcl_ros
@@ -34,7 +35,13 @@ target_link_libraries(map3d_saver
   ${catkin_LIBRARIES}
 )
 
-install(TARGETS map3d_server map3d_saver
+add_executable(map3d_to_costmap src/map3d_to_costmap.cpp)
+add_dependencies(map3d_to_costmap ${${PROJECT_NAME}_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+target_link_libraries(map3d_to_costmap
+  ${catkin_LIBRARIES}
+)
+
+install(TARGETS map3d_server map3d_saver map3d_to_costmap
   RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
 )
 
