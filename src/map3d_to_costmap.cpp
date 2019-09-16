@@ -188,28 +188,30 @@ public:
       return false;
     }
     pcl::io::loadPCDFile(file_name, pointcloud);
-    project_costmap();
+    project_to_costmap();
+
     // success: set frame_id appropriately
     cloud.header.frame_id = frame_id;
+
     return true;
   }
 
-  bool project_costmap()
+  bool project_to_costmap()
   {
     // to get the minimum and maximum points. could be useful to do some automation of the process
     // (now the values are hardcoded)
     pcl::PointXYZ min_point, max_point;
     pcl::getMinMax3D(pointcloud, min_point, max_point);
 
-    pcl::PointCloud<PointType>::Ptr input(new pcl::PointCloud<PointType>());
-    *input = pointcloud;
+    pcl::PointCloud<PointType>::Ptr pointcloud_ptr(new pcl::PointCloud<PointType>());
+    *pointcloud_ptr = pointcloud;
 
     pcl::VoxelGrid<PointType> downsample;
-    downsample.setInputCloud(input);
+    downsample.setInputCloud(pointcloud_ptr);
     downsample.setLeafSize(resolution, resolution, resolution);
-    downsample.filter(pointcloud);
+    downsample.filter(*pointcloud_ptr);
 
-    for (auto& point : pointcloud)
+    for (auto& point : *pointcloud_ptr)
     {
       // remove points that are outside the boundind box, by setting their z to a huge value
       if (point.z > bb_min.z and point.z < bb_max.z)
@@ -218,10 +220,8 @@ public:
         point.z = 100;
     }
 
-    pcl::PointCloud<PointType>::Ptr p(new pcl::PointCloud<PointType>());
-    *p = pointcloud;
     pcl::KdTreeFLANN<pcl::PointXYZ> kdtree;
-    kdtree.setInputCloud(p);
+    kdtree.setInputCloud(pointcloud_ptr);
 
     std::vector<int> indices;
     std::vector<float> distances;
@@ -248,7 +248,6 @@ public:
           grid.data[index] = 100;
         else
           grid.data[index] = 0;
-        // grid.data[index] = (neighbours < 100) ? neighbours : 100;
         index++;
         if (maxn < neighbours)
           maxn = neighbours;
