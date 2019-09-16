@@ -74,6 +74,11 @@ T get_param(std::string const& name, T default_value)
 
 typedef pcl::PointXYZ PointType;
 
+struct Point
+{
+  double x, y, z;
+};
+
 class map3d_to_costmap
 {
   ros::NodeHandle nh;
@@ -92,11 +97,13 @@ class map3d_to_costmap
   pcl::PointCloud<PointType> pointcloud;
   nav_msgs::OccupancyGrid grid;
   ros::Publisher cloud_pub, grid_pub;
+
   // timer to handle republishing
   ros::Timer timer;
 
-  int threshold;
+  int occupancy_threshold;
   double resolution;
+  Point bb_min, bb_max;
 
   void publish()
   {
@@ -128,7 +135,7 @@ public:
     , interval(0.0)
     , frame_id("map")
     , latch(false)
-    , threshold(100)
+    , occupancy_threshold(100)
     , resolution(0.1)
   {
     // update potentially remapped topic name for later logging
@@ -141,8 +148,16 @@ public:
     interval = get_param("~interval", interval);
     frame_id = get_param("~frame_id", frame_id);
     latch = get_param("~latch", latch);
-    threshold = get_param("~threshold", threshold);
+    occupancy_threshold = get_param("~occupancy_threshold", occupancy_threshold);
     resolution = get_param("~resolution", resolution);
+
+    bb_min.x = -50;
+    bb_min.y = -15;
+    bb_min.z = 0.2;
+
+    bb_max.x = 15;
+    bb_max.y = 3;
+    bb_max.z = 4;
   }
 
   void parse_cmdline_args(int argc, char** argv)
@@ -181,6 +196,11 @@ public:
 
   bool project_costmap()
   {
+    // to get the minimum and maximum points. could be useful to do some automation of the process
+    // (now the values are hardcoded)
+    pcl::PointXYZ min_point, max_point;
+    pcl::getMinMax3D(pointcloud, min_point, max_point);
+
     pcl::PointCloud<PointType>::Ptr input(new pcl::PointCloud<PointType>());
     *input = pointcloud;
 
@@ -191,20 +211,12 @@ public:
 
     for (auto& point : pointcloud)
     {
-      if (point.z > 0.2 and point.z < 4)
+      // remove points that are outside the boundind box, by setting their z to a huge value
+      if (point.z > bb_min.z and point.z < bb_max.z)
         point.z = 0;
       else
         point.z = 100;
     }
-
-    pcl::PointXYZ min_point, max_point;
-    pcl::getMinMax3D(pointcloud, min_point, max_point);
-
-    min_point.x = -50;
-    min_point.y = -15;
-
-    max_point.x = 15;
-    max_point.y = 3;
 
     pcl::PointCloud<PointType>::Ptr p(new pcl::PointCloud<PointType>());
     *p = pointcloud;
@@ -213,30 +225,26 @@ public:
 
     std::vector<int> indices;
     std::vector<float> distances;
-    // double resolution = 0.5;
-    // int threshold = 350;
 
     grid.info.resolution = resolution;
-    grid.info.width = ((int)((max_point.x - min_point.x) / resolution)) + 1;
-    grid.info.height = ((int)((max_point.y - min_point.y) / resolution)) + 1;
-    grid.info.origin.position.x = min_point.x;
-    grid.info.origin.position.y = min_point.y;
+    grid.info.width = ((int)((bb_max.x - bb_min.x) / resolution)) + 1;
+    grid.info.height = ((int)((bb_max.y - bb_min.y) / resolution)) + 1;
+    grid.info.origin.position.x = bb_min.x;
+    grid.info.origin.position.y = bb_min.y;
     size_t grid_size = grid.info.width * grid.info.height;
     grid.data = std::vector<int8_t>(grid_size, 0);
 
     int maxn = 0;
     int index = 0;
     for (int index_y = 0; index_y < grid.info.height; index_y++)
-    // for (double y = min_point.y; y <= max_point.y; y += resolution)
     {
       for (int index_x = 0; index_x < grid.info.width; index_x++)
-      // for (double x = min_point.x; x <= max_point.x; x += resolution)
       {
-        double x = min_point.x + index_x * resolution;
-        double y = min_point.y + index_y * resolution;
+        double x = bb_min.x + index_x * resolution;
+        double y = bb_min.y + index_y * resolution;
         PointType point(x, y, 0);
         int neighbours = kdtree.radiusSearch(point, resolution, indices, distances);
-        if (neighbours > threshold)
+        if (neighbours > occupancy_threshold)
           grid.data[index] = 100;
         else
           grid.data[index] = 0;
