@@ -226,6 +226,9 @@ public:
     std::vector<int> indices;
     std::vector<float> distances;
 
+    grid.header.stamp = ros::Time::now();
+    grid.header.frame_id = frame_id;
+
     grid.info.resolution = resolution;
     grid.info.width = ((int)((bb_max.x - bb_min.x) / resolution)) + 1;
     grid.info.height = ((int)((bb_max.y - bb_min.y) / resolution)) + 1;
