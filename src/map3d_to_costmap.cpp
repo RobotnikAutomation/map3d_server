@@ -246,8 +246,16 @@ public:
     grid.header.frame_id = frame_id;
 
     grid.info.resolution = resolution;
-    grid.info.width = ((int)((bb_max.x - bb_min.x) / resolution)) + 1;
-    grid.info.height = ((int)((bb_max.y - bb_min.y) / resolution)) + 1;
+
+    if (bb_min.x < bb_max.x)
+      grid.info.width = ((int)((bb_max.x - bb_min.x) / resolution)) + 1;
+    else  // this is nonsense, so fuck it
+      grid.info.width = 1;
+    if (bb_min.y < bb_max.y)
+      grid.info.height = ((int)((bb_max.y - bb_min.y) / resolution)) + 1;
+    else  // this is nonsense, so fuck it
+      grid.info.height = 1;
+
     grid.info.origin.position.x = bb_min.x;
     grid.info.origin.position.y = bb_min.y;
     size_t grid_size = grid.info.width * grid.info.height;
