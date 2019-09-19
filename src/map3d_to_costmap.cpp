@@ -63,6 +63,9 @@ messages on the network.
 #include <string>
 #include <sstream>
 
+#include <dynamic_reconfigure/server.h>
+#include <map3d_server/Map3dToCostmapConfig.h>
+
 // helper function to return parsed parameter or default value
 template <typename T>
 T get_param(std::string const& name, T default_value)
@@ -101,6 +104,12 @@ class map3d_to_costmap
   // timer to handle republishing
   ros::Timer timer;
 
+  // manage reconfigure parameters
+  dynamic_reconfigure::Server<map3d_server::Map3dToCostmapConfig> reconfigure_server;
+
+  // is running, to not trigger
+  bool running;
+
   int occupancy_threshold;
   double resolution;
   Point bb_min, bb_max;
@@ -124,6 +133,7 @@ class map3d_to_costmap
 
   void timer_callback(ros::TimerEvent const&)
   {
+    ROS_INFO("Timer");
     // just re-publish
     publish();
   }
@@ -134,12 +144,14 @@ public:
     , file_name("")
     , interval(0.0)
     , frame_id("map")
-    , latch(false)
+    , latch(true)
     , occupancy_threshold(100)
     , resolution(0.1)
+    , running(false)
   {
     // update potentially remapped topic name for later logging
     cloud_topic = nh.resolveName(cloud_topic);
+    reconfigure_server.setCallback(boost::bind(&map3d_to_costmap::reconfigureCallback, this, _1));
   }
 
   void parse_ros_params()
@@ -148,16 +160,13 @@ public:
     interval = get_param("~interval", interval);
     frame_id = get_param("~frame_id", frame_id);
     latch = get_param("~latch", latch);
-    occupancy_threshold = get_param("~occupancy_threshold", occupancy_threshold);
-    resolution = get_param("~resolution", resolution);
+    // bb_min.x = 0;
+    // bb_min.y = 0;
+    // bb_min.z = 0;
 
-    bb_min.x = -50;
-    bb_min.y = -15;
-    bb_min.z = 0.2;
-
-    bb_max.x = 15;
-    bb_max.y = 3;
-    bb_max.z = 4;
+    // bb_max.x = 10;
+    // bb_max.y = 10;
+    // bb_max.z = 10;
   }
 
   void parse_cmdline_args(int argc, char** argv)
@@ -203,6 +212,13 @@ public:
     pcl::PointXYZ min_point, max_point;
     pcl::getMinMax3D(pointcloud, min_point, max_point);
 
+    ROS_INFO_STREAM("Projecting pointcloud to costmap");
+    ROS_INFO_STREAM(" * points: " << pointcloud.points.size());
+    ROS_INFO_STREAM(" * limits: (" << min_point.x << ", " << min_point.y << ", " << min_point.z << ") to ("
+                                   << max_point.x << ", " << max_point.y << ", " << max_point.z << ")");
+
+    ROS_INFO_STREAM(" * projected limits: (" << bb_min.x << ", " << bb_min.y << ", " << bb_min.z << ") to (" << bb_max.x
+                                             << ", " << bb_max.y << ", " << bb_max.z << ")");
     pcl::PointCloud<PointType>::Ptr pointcloud_ptr(new pcl::PointCloud<PointType>());
     *pointcloud_ptr = pointcloud;
 
@@ -272,6 +288,7 @@ public:
     // treat publishing once as a special case to interval publishing
     bool oneshot = interval <= 0;
     timer = nh.createTimer(ros::Duration(interval), &map3d_to_costmap::timer_callback, this, oneshot);
+    running = true;
   }
 
   void print_config_info()
@@ -290,6 +307,27 @@ public:
     ROS_INFO_STREAM(" * number of points: " << cloud.width * cloud.height);
     ROS_INFO_STREAM(" * total size [bytes]: " << cloud.data.size());
     ROS_INFO_STREAM(" * channel names: " << pcl::getFieldsList(cloud));
+  }
+
+  void reconfigureCallback(map3d_server::Map3dToCostmapConfig& config)
+  {
+    ROS_INFO("Reconfigure called");
+    bb_min.x = config.min_x;
+    bb_min.y = config.min_y;
+    bb_min.z = config.min_z;
+
+    bb_max.x = config.max_x;
+    bb_max.y = config.max_y;
+    bb_max.z = config.max_z;
+
+    resolution = config.resolution;
+    occupancy_threshold = config.occupancy_threshold;
+    // trigger reprojection only if node is running
+    if (running)
+    {
+      project_to_costmap();
+      publish();
+    }
   }
 };
 

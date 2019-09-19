@@ -1,3 +1,5 @@
-merge map3d_server and map3d_to_costmap in one
+map3d_to_costmap:
+ - read cloud from topic
+ - do not publish as pointcloud
 
 add more parameter readings
