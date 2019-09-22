@@ -93,6 +93,8 @@ class map3d_to_costmap
   double interval;
   // tf2 frame_id
   std::string frame_id;
+  // name for publishing the name
+  std::string map_topic;
   // latched topic enabled/disabled
   bool latch;
   // pointcloud message and publisher
@@ -144,6 +146,7 @@ public:
     , file_name("")
     , interval(0.0)
     , frame_id("map")
+    , map_topic("map")
     , latch(true)
     , occupancy_threshold(100)
     , resolution(0.1)
@@ -160,6 +163,8 @@ public:
     interval = get_param("~interval", interval);
     frame_id = get_param("~frame_id", frame_id);
     latch = get_param("~latch", latch);
+    map_topic = get_param("~map_topic", map_topic);
+    cloud_topic = get_param("~cloud_topic", cloud_topic);
     // bb_min.x = 0;
     // bb_min.y = 0;
     // bb_min.z = 0;
@@ -292,7 +297,7 @@ public:
   {
     // init publisher
     cloud_pub = nh.advertise<sensor_msgs::PointCloud2>(cloud_topic, 1, latch);
-    grid_pub = nh.advertise<nav_msgs::OccupancyGrid>("grid", 1, latch);
+    grid_pub = nh.advertise<nav_msgs::OccupancyGrid>(map_topic, 1, latch);
     // treat publishing once as a special case to interval publishing
     bool oneshot = interval <= 0;
     timer = nh.createTimer(ros::Duration(interval), &map3d_to_costmap::timer_callback, this, oneshot);
