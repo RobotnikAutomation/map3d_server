@@ -78,12 +78,12 @@ private:
   bool binary_;
   bool compressed_;
   std::string fixed_frame_;
+  std::string cloud_topic_;
   tf2_ros::Buffer tf_buffer_;
   tf2_ros::TransformListener tf_listener_;
 
 public:
-  string cloud_topic_;
-
+  
   ros::Subscriber sub_;
 
   ////////////////////////////////////////////////////////////////////////////////
@@ -103,7 +103,7 @@ public:
       if (!tf_buffer_.canTransform(fixed_frame_, cloud->header.frame_id, pcl_conversions::fromPCL(cloud->header.stamp),
                                    ros::Duration(3.0)))
       {
-        ROS_WARN("Could not get transform!");
+        ROS_WARN("Could not get transform from %s to %s!", cloud->header.frame_id.c_str(), fixed_frame_.c_str());
         return;
       }
 
@@ -147,7 +147,7 @@ public:
   }
 
   ////////////////////////////////////////////////////////////////////////////////
-  map3d_saver() : binary_(false), compressed_(false), tf_listener_(tf_buffer_)
+  map3d_saver() : binary_(false), compressed_(false), tf_listener_(tf_buffer_), cloud_topic_("input"), fixed_frame_("")
   {
     // Check if a prefix parameter is defined for output file names.
     ros::NodeHandle priv_nh("~");
@@ -164,6 +164,7 @@ public:
     priv_nh.getParam("binary", binary_);
     priv_nh.getParam("compressed", compressed_);
     priv_nh.getParam("filename", filename_);
+    priv_nh.getParam("cloud_topic", cloud_topic_);
     if (binary_)
     {
       if (compressed_)
@@ -185,7 +186,6 @@ public:
       ROS_INFO_STREAM("Saving to fixed filename: " << filename_);
     }
 
-    cloud_topic_ = "input";
 
     sub_ = nh_.subscribe(cloud_topic_, 1, &map3d_saver::cloud_cb, this);
     ROS_INFO("Listening for incoming data on topic %s", nh_.resolveName(cloud_topic_).c_str());
@@ -199,11 +199,19 @@ int main(int argc, char** argv)
 
   map3d_saver b;
   ros::Rate r(10);
+  ros::Time init_time = ros::Time::now();
+  ros::Duration max_waiting_time = ros::Duration(10);
   while (ros::ok())
   {
     ROS_INFO_THROTTLE(5, "Waiting for incoming data");
     r.sleep();
     ros::spinOnce();
+    
+    if((ros::Time::now() - init_time) > max_waiting_time)
+    {
+      ROS_ERROR("Error: %.1lf seconds without receiving the pointcloud", max_waiting_time.toSec());
+      return -1;
+    }
   }
 
   return (0);
